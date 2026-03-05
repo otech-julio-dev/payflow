@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: docker.io/library/mysql:8.0
+    container_name: payflow-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: payflow_root
+      MYSQL_DATABASE: payflow_db
+      MYSQL_USER: payflow_user
+      MYSQL_PASSWORD: payflow_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: docker.io/library/mongo:7.0
+    container_name: payflow-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: payflow_user
+      MONGO_INITDB_ROOT_PASSWORD: payflow_pass
+      MONGO_INITDB_DATABASE: payflow_transactions
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mysql_data:
+  mongo_data:
