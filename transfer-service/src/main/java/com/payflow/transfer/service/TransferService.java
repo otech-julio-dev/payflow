@@ -6,9 +6,11 @@ import com.payflow.transfer.dto.response.TransferResponse;
 import com.payflow.transfer.entity.Transfer;
 import com.payflow.transfer.exception.TransferException;
 import com.payflow.transfer.repository.TransferRepository;
+import com.payflow.transfer.client.TransactionClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -17,11 +19,14 @@ public class TransferService {
 
     private final TransferRepository transferRepository;
     private final WalletClient       walletClient;
+    private final TransactionClient   transactionClient;
 
     public TransferService(TransferRepository transferRepository,
-                           WalletClient walletClient) {
+                           WalletClient walletClient,
+                       TransactionClient transactionClient) {
         this.transferRepository = transferRepository;
         this.walletClient       = walletClient;
+        this.transactionClient   = transactionClient;
     }
 
     @Transactional
@@ -59,15 +64,44 @@ public class TransferService {
 
         // 5. Ejecutar débito y crédito
         try {
-            walletClient.debit(senderUserId, req.amount(), authToken);
-            walletClient.credit(receiverUserId, req.amount(), authToken);
-            transfer.complete();
-        } catch (Exception e) {
-            transfer.fail(e.getMessage());
-            transferRepository.save(transfer);
-            throw new TransferException("Error al procesar la transferencia: "
-                + e.getMessage());
-        }
+        // Débito en cuenta origen
+        walletClient.debit(senderUserId, req.amount(), authToken);
+        Map<String, Object> senderAfter =
+            walletClient.getAccountByUserId(senderUserId, authToken);
+        BigDecimal senderBalanceAfter =
+            new BigDecimal(senderAfter.get("balance").toString());
+
+        // Crédito en cuenta destino
+        walletClient.credit(receiverUserId, req.amount(), authToken);
+        Map<String, Object> receiverAfter =
+            walletClient.getAccountByNumber(req.targetAccountNumber(), authToken);
+        BigDecimal receiverBalanceAfter =
+            new BigDecimal(receiverAfter.get("balance").toString());
+
+        transfer.complete();
+        transferRepository.save(transfer);
+
+        // Registrar en MongoDB (async — no bloquea si falla)
+        String refId = "TRF-" + transfer.getId();
+        transactionClient.recordDebit(
+            senderUserId, receiverUserId,
+            senderAccountNumber, req.targetAccountNumber(),
+            req.amount(), senderBalanceAfter,
+            req.description(), refId
+        );
+        transactionClient.recordCredit(
+            receiverUserId, senderUserId,
+            req.targetAccountNumber(), senderAccountNumber,
+            req.amount(), receiverBalanceAfter,
+            req.description(), refId
+        );
+
+    } catch (Exception e) {
+        transfer.fail(e.getMessage());
+        transferRepository.save(transfer);
+        throw new TransferException("Error al procesar la transferencia: "
+            + e.getMessage());
+    }
 
         transferRepository.save(transfer);
         return TransferResponse.from(transfer);

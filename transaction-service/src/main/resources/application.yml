@@ -1,0 +1,19 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: transaction-service
+  data:
+    mongodb:
+      uri: mongodb://payflow_user:payflow_pass@localhost:27017/payflow_transactions?authSource=admin
+      database: payflow_transactions
+
+jwt:
+  secret: payflow-super-secret-key-that-is-at-least-64-characters-long-for-hs512
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
