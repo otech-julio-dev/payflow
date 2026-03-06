@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext'
 import { walletApi } from '../api/wallet'
 import toast from 'react-hot-toast'
 import Spinner from '../components/ui/Spinner'
+import TransferModal from '../components/ui/TransferModal'
+import TransactionList from '../components/ui/TransactionList'
 import {
   CreditCard, TrendingUp, ArrowUpRight, ArrowDownLeft,
   LogOut, RefreshCw, Plus, Copy, CheckCircle
@@ -12,9 +14,10 @@ import { useState } from 'react'
 export default function DashboardPage() {
   const { user, logout }  = useAuth()
   const queryClient       = useQueryClient()
-  const [copied, setCopied]   = useState(false)
+  const [copied, setCopied]         = useState(false)
   const [topUpAmount, setTopUpAmount] = useState('')
   const [showTopUp, setShowTopUp]     = useState(false)
+  const [showTransfer, setShowTransfer] = useState(false)
 
   // ── Queries ───────────────────────────────────────────────
   const { data: account, isLoading: loadingAccount } = useQuery({
@@ -27,6 +30,7 @@ export default function DashboardPage() {
     mutationFn: (amount) => walletApi.topUp({ amount: parseFloat(amount) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['account'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
       toast.success('¡Saldo agregado exitosamente!')
       setTopUpAmount('')
       setShowTopUp(false)
@@ -65,6 +69,11 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+
+      {/* Transfer Modal */}
+      {showTransfer && (
+        <TransferModal onClose={() => setShowTransfer(false)} />
+      )}
 
       {/* Header */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
@@ -107,7 +116,10 @@ export default function DashboardPage() {
               <p className="text-blue-200 text-xs mt-1">MXN</p>
             </div>
             <button
-              onClick={() => queryClient.invalidateQueries({ queryKey: ['account'] })}
+              onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ['account'] })
+                queryClient.invalidateQueries({ queryKey: ['transactions'] })
+              }}
               className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
             >
               <RefreshCw className="w-5 h-5" />
@@ -151,11 +163,9 @@ export default function DashboardPage() {
           </button>
 
           <button
+            onClick={() => setShowTransfer(true)}
             className="card flex items-center gap-3 hover:border-brand-500
-                       hover:shadow-md transition-all duration-200 cursor-pointer
-                       opacity-60"
-            onClick={() => toast('Transferencias disponibles en Semana 2 🚀',
-              { icon: '⏳' })}
+                       hover:shadow-md transition-all duration-200 cursor-pointer"
           >
             <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
               <ArrowUpRight className="w-5 h-5 text-blue-600" />
@@ -235,15 +245,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Coming Soon */}
-        <div className="card border-dashed border-gray-200 text-center py-8">
-          <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center
-                          justify-center mx-auto mb-3">
-            <TrendingUp className="w-6 h-6 text-gray-300" />
-          </div>
-          <p className="font-semibold text-gray-400 text-sm">Historial de movimientos</p>
-          <p className="text-xs text-gray-300 mt-1">Disponible en Semana 2</p>
-        </div>
+        {/* Transaction History */}
+        <TransactionList />
 
       </main>
     </div>
