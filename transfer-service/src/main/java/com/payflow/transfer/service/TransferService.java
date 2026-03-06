@@ -7,6 +7,7 @@ import com.payflow.transfer.entity.Transfer;
 import com.payflow.transfer.exception.TransferException;
 import com.payflow.transfer.repository.TransferRepository;
 import com.payflow.transfer.client.TransactionClient;
+import com.payflow.transfer.client.SqsProducer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,13 +21,16 @@ public class TransferService {
     private final TransferRepository transferRepository;
     private final WalletClient       walletClient;
     private final TransactionClient   transactionClient;
+    private final SqsProducer sqsProducer;
 
     public TransferService(TransferRepository transferRepository,
-                           WalletClient walletClient,
-                       TransactionClient transactionClient) {
+                        WalletClient walletClient,
+                        TransactionClient transactionClient,
+                        SqsProducer sqsProducer) {
         this.transferRepository = transferRepository;
         this.walletClient       = walletClient;
-        this.transactionClient   = transactionClient;
+        this.transactionClient  = transactionClient;
+        this.sqsProducer        = sqsProducer;
     }
 
     @Transactional
@@ -95,6 +99,15 @@ public class TransferService {
             req.amount(), receiverBalanceAfter,
             req.description(), refId
         );
+        sqsProducer.publishTransferCompleted(
+        transfer.getId(),
+        senderUserId,
+        receiverUserId,
+        senderAccountNumber,
+        req.targetAccountNumber(),
+        req.amount(),
+        req.description()
+    );
 
     } catch (Exception e) {
         transfer.fail(e.getMessage());

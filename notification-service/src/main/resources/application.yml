@@ -1,0 +1,19 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: notification-service
+
+aws:
+  region: us-east-1
+  sqs:
+    queue-url: https://sqs.us-east-1.amazonaws.com/150506369517/payflow-transfers
+  sns:
+    topic-arn: arn:aws:sns:us-east-1:150506369517:payflow-notifications
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

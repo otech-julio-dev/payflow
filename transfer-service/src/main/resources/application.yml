@@ -29,3 +29,6 @@ management:
     web:
       exposure:
         include: health,info
+aws:
+  sqs:
+    queue-url: https://sqs.us-east-1.amazonaws.com/150506369517/payflow-transfers
