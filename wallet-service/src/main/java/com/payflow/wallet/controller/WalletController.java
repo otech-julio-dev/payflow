@@ -1,5 +1,7 @@
 package com.payflow.wallet.controller;
 
+import com.payflow.wallet.dto.request.InternalOperationRequest;
+import org.springframework.web.bind.annotation.PathVariable;
 import com.payflow.wallet.dto.request.TopUpRequest;
 import com.payflow.wallet.dto.response.AccountResponse;
 import com.payflow.wallet.dto.response.BalanceResponse;
@@ -49,5 +51,25 @@ public class WalletController {
             return ((Integer) credentials).longValue();
         }
         throw new IllegalStateException("No se pudo extraer el userId del token");
+    }
+
+    @GetMapping("/by-account/{accountNumber}")
+    public ResponseEntity<AccountResponse> getByAccountNumber(
+            @PathVariable String accountNumber) {
+        return ResponseEntity.ok(walletService.getByAccountNumber(accountNumber));
+    }
+
+    @PostMapping("/internal/debit")
+    public ResponseEntity<Void> internalDebit(
+            @RequestBody InternalOperationRequest req) {
+        walletService.internalDebit(req.userId(), req.amount());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/internal/credit")
+    public ResponseEntity<Void> internalCredit(
+            @RequestBody InternalOperationRequest req) {
+        walletService.internalCredit(req.userId(), req.amount());
+        return ResponseEntity.ok().build();
     }
 }

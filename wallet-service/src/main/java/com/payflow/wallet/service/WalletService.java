@@ -10,6 +10,7 @@ import com.payflow.wallet.repository.AccountRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -65,5 +66,29 @@ public class WalletService {
                              + "-" + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
         Account newAccount = new Account(userId, accountNumber);
         return accountRepository.save(newAccount);
+    }
+
+    @Transactional(readOnly = true)
+    public AccountResponse getByAccountNumber(String accountNumber) {
+        Account account = accountRepository.findByAccountNumber(accountNumber)
+            .orElseThrow(() -> new AccountNotFoundException(accountNumber));
+        return AccountResponse.from(account);
+    }
+
+    @Transactional
+    public void internalDebit(Long userId, BigDecimal amount) {
+        Account account = accountRepository.findByUserIdWithLock(userId)
+            .orElseThrow(() -> new AccountNotFoundException(userId));
+        if (!account.isActive()) throw new AccountSuspendedException(account.getAccountNumber());
+        account.debit(amount);
+        accountRepository.save(account);
+    }
+
+    @Transactional
+    public void internalCredit(Long userId, BigDecimal amount) {
+        Account account = accountRepository.findByUserIdWithLock(userId)
+            .orElseThrow(() -> new AccountNotFoundException(userId));
+        account.credit(amount);
+        accountRepository.save(account);
     }
 }
