@@ -7,15 +7,11 @@ on:
     branches: [main]
 
 env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
   ECS_CLUSTER: payflow-cluster
+  AWS_REGION: us-east-1
 
 jobs:
-  # ─────────────────────────────────────────
-  # JOB 1: Tests
-  # ─────────────────────────────────────────
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -39,9 +35,6 @@ jobs:
           name: test-results
           path: transfer-service/target/surefire-reports/
 
-  # ─────────────────────────────────────────
-  # JOB 2: Build & Push ECR (solo en main)
-  # ─────────────────────────────────────────
   build-and-push:
     name: Build & Push ECR
     runs-on: ubuntu-latest
@@ -51,17 +44,11 @@ jobs:
       matrix:
         service:
           - name: auth-service
-            port: 8081
           - name: wallet-service
-            port: 8082
           - name: transfer-service
-            port: 8083
           - name: transaction-service
-            port: 8084
           - name: notification-service
-            port: 8085
           - name: api-gateway
-            port: 8080
 
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +65,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: us-east-1
 
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
@@ -88,16 +75,12 @@ jobs:
 
       - name: Build & Push Docker image
         run: |
-          IMAGE=$ECR_REGISTRY/payflow/${{ matrix.service.name }}:${{ github.sha }}
-          IMAGE_LATEST=$ECR_REGISTRY/payflow/${{ matrix.service.name }}:latest
+          IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/payflow/${{ matrix.service.name }}:${{ github.sha }}
+          IMAGE_LATEST=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/payflow/${{ matrix.service.name }}:latest
           docker build -t $IMAGE -t $IMAGE_LATEST ${{ matrix.service.name }}/
           docker push $IMAGE
           docker push $IMAGE_LATEST
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-  # ─────────────────────────────────────────
-  # JOB 3: Build & Push Frontend
-  # ─────────────────────────────────────────
   build-frontend:
     name: Build & Push Frontend
     runs-on: ubuntu-latest
@@ -111,22 +94,19 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: us-east-1
 
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build & Push Frontend
         run: |
-          IMAGE=$ECR_REGISTRY/payflow/frontend:${{ github.sha }}
-          IMAGE_LATEST=$ECR_REGISTRY/payflow/frontend:latest
+          IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/payflow/frontend:${{ github.sha }}
+          IMAGE_LATEST=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/payflow/frontend:latest
           docker build -t $IMAGE -t $IMAGE_LATEST frontend/
           docker push $IMAGE
           docker push $IMAGE_LATEST
 
-  # ─────────────────────────────────────────
-  # JOB 4: Deploy ECS
-  # ─────────────────────────────────────────
   deploy:
     name: Deploy to ECS
     runs-on: ubuntu-latest
@@ -138,44 +118,32 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: us-east-1
 
       - name: Deploy all services
         run: |
-          SERVICES=(
-            payflow-auth-service
-            payflow-wallet-service
-            payflow-transfer-service
-            payflow-transaction-service
-            payflow-notification-service
-            payflow-api-gateway
-            payflow-frontend
-          )
-          for SERVICE in "${SERVICES[@]}"; do
+          for SERVICE in payflow-auth-service payflow-wallet-service payflow-transfer-service \
+                         payflow-transaction-service payflow-notification-service \
+                         payflow-api-gateway payflow-frontend; do
             echo "🚀 Deploying $SERVICE..."
             aws ecs update-service \
-              --cluster $ECS_CLUSTER \
+              --cluster payflow-cluster \
               --service $SERVICE \
               --force-new-deployment \
-              --region $AWS_REGION \
+              --region us-east-1 \
               --query 'service.{Name:serviceName,Status:status}' \
               --output table
           done
 
       - name: Wait for services stable
         run: |
-          SERVICES=(
-            payflow-auth-service
-            payflow-wallet-service
-            payflow-transfer-service
-            payflow-api-gateway
-          )
-          for SERVICE in "${SERVICES[@]}"; do
+          for SERVICE in payflow-auth-service payflow-wallet-service \
+                         payflow-transfer-service payflow-api-gateway; do
             echo "⏳ Waiting for $SERVICE..."
             aws ecs wait services-stable \
-              --cluster $ECS_CLUSTER \
+              --cluster payflow-cluster \
               --services $SERVICE \
-              --region $AWS_REGION
+              --region us-east-1
             echo "✅ $SERVICE stable"
           done
 
