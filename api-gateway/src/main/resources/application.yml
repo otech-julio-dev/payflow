@@ -9,23 +9,15 @@ spring:
       server:
         webflux:
           routes:
-            - id: auth-public
-              uri: http://localhost:8081
-              predicates:
-                - Path=/api/auth/register,/api/auth/login,/api/auth/refresh
-              filters:
-                - StripPrefix=0
-
-            - id: auth-protected
-              uri: http://localhost:8081
+            - id: auth-service
+              uri: ${AUTH_SERVICE_URL:http://localhost:8081}
               predicates:
                 - Path=/api/auth/**
               filters:
                 - StripPrefix=0
-                - JwtAuth
 
             - id: wallet-service
-              uri: http://localhost:8082
+              uri: ${WALLET_SERVICE_URL:http://localhost:8082}
               predicates:
                 - Path=/api/wallets/**
               filters:
@@ -33,7 +25,7 @@ spring:
                 - JwtAuth
 
             - id: transfer-service
-              uri: http://localhost:8083
+              uri: ${TRANSFER_SERVICE_URL:http://localhost:8083}
               predicates:
                 - Path=/api/transfers/**
               filters:
@@ -41,34 +33,36 @@ spring:
                 - JwtAuth
 
             - id: transaction-service
-              uri: http://localhost:8084
+              uri: ${TRANSACTION_SERVICE_URL:http://localhost:8084}
               predicates:
                 - Path=/api/transactions/**
               filters:
                 - StripPrefix=0
                 - JwtAuth
 
+            - id: notification-service
+              uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8085}
+              predicates:
+                - Path=/api/notifications/**
+              filters:
+                - StripPrefix=0
+
           globalcors:
-            cors-configurations:
+            corsConfigurations:
               '[/**]':
                 allowedOrigins:
                   - "http://localhost:5173"
                   - "http://localhost:3000"
-                allowedMethods:
-                  - GET
-                  - POST
-                  - PUT
-                  - DELETE
-                  - OPTIONS
-                allowedHeaders:
-                  - "*"
+                  - ${FRONTEND_URL:http://localhost:5173}
+                allowedMethods: "*"
+                allowedHeaders: "*"
                 allowCredentials: true
 
 jwt:
-  secret: payflow-super-secret-key-that-is-at-least-64-characters-long-for-hs512
+  secret: ${JWT_SECRET:payflow-super-secret-key-that-is-at-least-64-characters-long-for-hs512}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info
