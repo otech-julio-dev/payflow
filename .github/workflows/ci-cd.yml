@@ -145,35 +145,15 @@ jobs:
             echo "✅ $SERVICE stable"
           done
 
-      - name: Get Gateway IP and smoke test
+      - name: Smoke test via ALB
         run: |
-          TASK=$(aws ecs list-tasks \
-            --cluster payflow-cluster \
-            --service-name payflow-api-gateway \
-            --region us-east-1 \
-            --query 'taskArns[0]' --output text)
-
-          ENI=$(aws ecs describe-tasks \
-            --cluster payflow-cluster \
-            --tasks $TASK \
-            --region us-east-1 \
-            --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' \
-            --output text)
-
-          IP=$(aws ec2 describe-network-interfaces \
-            --network-interface-ids $ENI \
-            --query 'NetworkInterfaces[0].Association.PublicIp' \
-            --output text --region us-east-1)
-
-          echo "🌐 Gateway IP: $IP"
-
           sleep 30
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             --max-time 30 \
-            http://$IP:8080/actuator/health)
+            http://payflow-alb-542087659.us-east-1.elb.amazonaws.com:8080/actuator/health)
 
           if [ "$STATUS" = "200" ]; then
-            echo "✅ Smoke test passed — $IP:8080"
+            echo "✅ Smoke test passed via ALB"
           else
             echo "❌ Smoke test failed: HTTP $STATUS"
             exit 1
