@@ -7,9 +7,7 @@ on:
     branches: [main]
 
 env:
-  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
   ECS_CLUSTER: payflow-cluster
-  AWS_REGION: us-east-1
 
 jobs:
   test:
@@ -147,14 +145,36 @@ jobs:
             echo "✅ $SERVICE stable"
           done
 
-      - name: Smoke test
+      - name: Get Gateway IP and smoke test
         run: |
+          TASK=$(aws ecs list-tasks \
+            --cluster payflow-cluster \
+            --service-name payflow-api-gateway \
+            --region us-east-1 \
+            --query 'taskArns[0]' --output text)
+
+          ENI=$(aws ecs describe-tasks \
+            --cluster payflow-cluster \
+            --tasks $TASK \
+            --region us-east-1 \
+            --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' \
+            --output text)
+
+          IP=$(aws ec2 describe-network-interfaces \
+            --network-interface-ids $ENI \
+            --query 'NetworkInterfaces[0].Association.PublicIp' \
+            --output text --region us-east-1)
+
+          echo "🌐 Gateway IP: $IP"
+
           sleep 30
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            http://98.94.14.32:8080/actuator/health)
+            --max-time 30 \
+            http://$IP:8080/actuator/health)
+
           if [ "$STATUS" = "200" ]; then
-            echo "✅ API Gateway health check passed"
+            echo "✅ Smoke test passed — $IP:8080"
           else
-            echo "❌ Health check failed: $STATUS"
+            echo "❌ Smoke test failed: HTTP $STATUS"
             exit 1
           fi
