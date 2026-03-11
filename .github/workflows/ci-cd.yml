@@ -150,7 +150,7 @@ jobs:
           sleep 30
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             --max-time 30 \
-            http://payflow-alb-542087659.us-east-1.elb.amazonaws.com:8080/actuator/health)
+            https://payflow.intellenz.com:8443/actuator/health)
 
           if [ "$STATUS" = "200" ]; then
             echo "✅ Smoke test passed via ALB"
