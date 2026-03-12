@@ -120,16 +120,53 @@ jobs:
 
       - name: Deploy all services
         run: |
-          for SERVICE in payflow-auth-service payflow-wallet-service payflow-transfer-service \
-                         payflow-transaction-service payflow-notification-service \
-                         payflow-api-gateway payflow-frontend; do
-            echo "🚀 Deploying $SERVICE..."
+          declare -A SERVICE_MAP=(
+            [payflow-auth-service]="auth-service"
+            [payflow-wallet-service]="wallet-service"
+            [payflow-transfer-service]="transfer-service"
+            [payflow-transaction-service]="transaction-service"
+            [payflow-notification-service]="notification-service"
+            [payflow-api-gateway]="api-gateway"
+            [payflow-frontend]="frontend"
+          )
+
+          for SERVICE in "${!SERVICE_MAP[@]}"; do
+            CONTAINER=${SERVICE_MAP[$SERVICE]}
+            IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/payflow/${CONTAINER}:${{ github.sha }}
+            echo "🚀 Registrando nueva task def para $SERVICE con imagen $IMAGE..."
+
+            # Obtener task def actual
+            TASK_DEF=$(aws ecs describe-task-definition \
+              --task-definition $SERVICE \
+              --region us-east-1 \
+              --query 'taskDefinition' \
+              --output json)
+
+            # Registrar nueva revisión con imagen del SHA actual
+            NEW_TASK_DEF=$(echo $TASK_DEF | python3 -c "
+import json, sys
+td = json.load(sys.stdin)
+td['containerDefinitions'][0]['image'] = '$IMAGE'
+for key in ['taskDefinitionArn','revision','status','requiresAttributes',
+            'compatibilities','registeredAt','registeredBy']:
+    td.pop(key, None)
+print(json.dumps(td))
+")
+            REVISION=$(aws ecs register-task-definition \
+              --cli-input-json "$NEW_TASK_DEF" \
+              --region us-east-1 \
+              --query 'taskDefinition.revision' \
+              --output text)
+
+            echo "✅ Task def registrada: $SERVICE:$REVISION"
+
+            # Deploy con nueva revisión
             aws ecs update-service \
               --cluster payflow-cluster \
               --service $SERVICE \
-              --force-new-deployment \
+              --task-definition $SERVICE:$REVISION \
               --region us-east-1 \
-              --query 'service.{Name:serviceName,Status:status}' \
+              --query 'service.{Name:serviceName,TaskDef:taskDefinition}' \
               --output table
           done
 
