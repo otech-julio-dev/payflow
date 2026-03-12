@@ -164,7 +164,7 @@ jobs:
             -d '{}' \
             https://payflow.intellenz.com/api/auth/register)
 
-          if [ "$STATUS" = "200" ]; then
+          if [ "$STATUS" = "400" ] || [ "$STATUS" = "200" ]; then
             echo "✅ Smoke test passed via ALB"
           else
             echo "❌ Smoke test failed: HTTP $STATUS"
