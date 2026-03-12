@@ -111,6 +111,8 @@ jobs:
     needs: [build-and-push, build-frontend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
+      - uses: actions/checkout@v4
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -120,55 +122,67 @@ jobs:
 
       - name: Deploy all services
         run: |
-          declare -A SERVICE_MAP=(
-            [payflow-auth-service]="auth-service"
-            [payflow-wallet-service]="wallet-service"
-            [payflow-transfer-service]="transfer-service"
-            [payflow-transaction-service]="transaction-service"
-            [payflow-notification-service]="notification-service"
-            [payflow-api-gateway]="api-gateway"
-            [payflow-frontend]="frontend"
-          )
+          cat > /tmp/update_task.py << 'PYEOF'
+          import json, sys, subprocess, os
 
-          for SERVICE in "${!SERVICE_MAP[@]}"; do
-            CONTAINER=${SERVICE_MAP[$SERVICE]}
-            IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/payflow/${CONTAINER}:${{ github.sha }}
-            echo "🚀 Registrando nueva task def para $SERVICE con imagen $IMAGE..."
+          services = {
+            "payflow-auth-service":          "auth-service",
+            "payflow-wallet-service":        "wallet-service",
+            "payflow-transfer-service":      "transfer-service",
+            "payflow-transaction-service":   "transaction-service",
+            "payflow-notification-service":  "notification-service",
+            "payflow-api-gateway":           "api-gateway",
+            "payflow-frontend":              "frontend",
+          }
+
+          account  = os.environ["AWS_ACCOUNT_ID"]
+          sha      = os.environ["GITHUB_SHA"]
+          region   = "us-east-1"
+          cluster  = "payflow-cluster"
+
+          for service, container in services.items():
+            image = f"{account}.dkr.ecr.{region}.amazonaws.com/payflow/{container}:{sha}"
+            print(f"🚀 Deploying {service} → {image}")
 
             # Obtener task def actual
-            TASK_DEF=$(aws ecs describe-task-definition \
-              --task-definition $SERVICE \
-              --region us-east-1 \
-              --query 'taskDefinition' \
-              --output json)
+            result = subprocess.run([
+              "aws", "ecs", "describe-task-definition",
+              "--task-definition", service,
+              "--region", region,
+              "--query", "taskDefinition",
+              "--output", "json"
+            ], capture_output=True, text=True)
+            td = json.loads(result.stdout)
 
-            # Registrar nueva revisión con imagen del SHA actual
-            NEW_TASK_DEF=$(echo $TASK_DEF | python3 -c "
-import json, sys
-td = json.load(sys.stdin)
-td['containerDefinitions'][0]['image'] = '$IMAGE'
-for key in ['taskDefinitionArn','revision','status','requiresAttributes',
-            'compatibilities','registeredAt','registeredBy']:
-    td.pop(key, None)
-print(json.dumps(td))
-")
-            REVISION=$(aws ecs register-task-definition \
-              --cli-input-json "$NEW_TASK_DEF" \
-              --region us-east-1 \
-              --query 'taskDefinition.revision' \
-              --output text)
+            # Actualizar imagen
+            td["containerDefinitions"][0]["image"] = image
+            for key in ["taskDefinitionArn","revision","status","requiresAttributes",
+                        "compatibilities","registeredAt","registeredBy"]:
+              td.pop(key, None)
 
-            echo "✅ Task def registrada: $SERVICE:$REVISION"
+            # Registrar nueva revisión
+            result = subprocess.run([
+              "aws", "ecs", "register-task-definition",
+              "--region", region,
+              "--cli-input-json", json.dumps(td),
+              "--query", "taskDefinition.revision",
+              "--output", "text"
+            ], capture_output=True, text=True)
+            revision = result.stdout.strip()
+            print(f"  ✅ Task def registrada: {service}:{revision}")
 
-            # Deploy con nueva revisión
-            aws ecs update-service \
-              --cluster payflow-cluster \
-              --service $SERVICE \
-              --task-definition $SERVICE:$REVISION \
-              --region us-east-1 \
-              --query 'service.{Name:serviceName,TaskDef:taskDefinition}' \
-              --output table
-          done
+            # Deploy
+            subprocess.run([
+              "aws", "ecs", "update-service",
+              "--cluster", cluster,
+              "--service", service,
+              "--task-definition", f"{service}:{revision}",
+              "--region", region,
+              "--query", "service.{Name:serviceName,TaskDef:taskDefinition}",
+              "--output", "table"
+            ])
+          PYEOF
+          python3 /tmp/update_task.py
 
       - name: Wait for services stable
         run: |
@@ -202,7 +216,7 @@ print(json.dumps(td))
             https://payflow.intellenz.com/api/auth/register)
 
           if [ "$STATUS" = "400" ] || [ "$STATUS" = "200" ]; then
-            echo "✅ Smoke test passed via ALB"
+            echo "✅ Smoke test passed: HTTP $STATUS"
           else
             echo "❌ Smoke test failed: HTTP $STATUS"
             exit 1
