@@ -121,6 +121,8 @@ jobs:
           aws-region: us-east-1
 
       - name: Deploy all services
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         run: |
           cat > /tmp/update_task.py << 'PYEOF'
           import json, sys, subprocess, os
