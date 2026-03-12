@@ -159,6 +159,9 @@ jobs:
           sleep 30
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             --max-time 30 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d '{}' \
             https://payflow.intellenz.com/api/auth/register)
 
           if [ "$STATUS" = "200" ]; then
