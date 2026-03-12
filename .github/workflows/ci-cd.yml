@@ -138,11 +138,20 @@ jobs:
           for SERVICE in payflow-auth-service payflow-wallet-service \
                          payflow-transfer-service payflow-api-gateway; do
             echo "⏳ Waiting for $SERVICE..."
-            aws ecs wait services-stable \
-              --cluster payflow-cluster \
-              --services $SERVICE \
-              --region us-east-1
-            echo "✅ $SERVICE stable"
+            for i in $(seq 1 20); do
+              RUNNING=$(aws ecs describe-services \
+                --cluster payflow-cluster \
+                --services $SERVICE \
+                --region us-east-1 \
+                --query 'services[0].runningCount' \
+                --output text)
+              if [ "$RUNNING" = "1" ]; then
+                echo "✅ $SERVICE stable (running=$RUNNING)"
+                break
+              fi
+              echo "  attempt $i/20 — running=$RUNNING, waiting 15s..."
+              sleep 15
+            done
           done
 
       - name: Smoke test via ALB
