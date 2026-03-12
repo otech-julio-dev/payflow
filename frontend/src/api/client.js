@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const client = axios.create({
-  baseURL: 'https://payflow.intellenz.com:8443',
+  baseURL: 'https://payflow.intellenz.com',
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -20,7 +20,7 @@ client.interceptors.response.use(
       try {
         const refreshToken = localStorage.getItem('refreshToken');
         const { data } = await axios.post(
-          'https://payflow.intellenz.com:8443/api/auth/refresh',
+          'https://payflow.intellenz.com/api/auth/refresh',
           { refreshToken }
         );
         localStorage.setItem('accessToken', data.accessToken);
