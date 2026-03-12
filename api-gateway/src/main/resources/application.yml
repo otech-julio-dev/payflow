@@ -27,13 +27,6 @@ spring:
                 allowCredentials: true
                 maxAge: 3600
       routes:
-        - id: options-preflight
-          uri: no://op
-          predicates:
-            - Method=OPTIONS
-          filters:
-            - SetStatus=200
-
         - id: auth-service
           uri: http://auth.payflow.internal:8081
           predicates:
@@ -68,5 +61,3 @@ management:
     web:
       exposure:
         include: health,info
-  server:
-    port: 8081
